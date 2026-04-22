@@ -1,0 +1,123 @@
+# CodeRabbit-Konfiguration — https://docs.coderabbit.ai/getting-started/configure-coderabbit
+language: "de-DE"
+early_access: false
+tone_instructions: "Sei direkt und konkret. Keine Lobhudelei, keine Wiederholungen. Wenn etwas okay ist, sag nichts."
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  high_level_summary_in_walkthrough: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  changed_files_summary: true
+  sequence_diagrams: false
+  assess_linked_issues: true
+  related_issues: true
+  related_prs: true
+  suggested_labels: true
+  auto_apply_labels: false
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: false
+    base_branches:
+      - "main"
+
+  path_filters:
+    - "!**/*.lock"
+    - "!**/pnpm-lock.yaml"
+    - "!**/node_modules/**"
+    - "!.next/**"
+    - "!drizzle/**"
+    - "!public/**"
+    - "!**/*.svg"
+    - "!**/*.ico"
+    - "!.vscode/**"
+
+  path_instructions:
+    - path: "lib/db/schema.ts"
+      instructions: |
+        Prüfe bei Schema-Änderungen:
+        - Sind alle Foreign Keys mit passender ON DELETE-Strategie versehen
+          (cascade für Owned-Daten, set null für Audit-Felder wie uploaded_by)?
+        - Gibt es zu jedem Lookup-Pattern einen passenden Index?
+        - Bleiben unique constraints konsistent (z. B. menu_pdf eine PDF pro
+          Kategorie pro Org)?
+        - Naming: snake_case für DB-Spalten, camelCase für TS-Properties.
+        - Werden Migrations-Risiken (NOT NULL ohne default, Renames)
+          gekennzeichnet?
+
+    - path: "lib/auth.ts"
+      instructions: |
+        Better-Auth-Konfiguration ist sicherheitskritisch:
+        - Secret darf nur aus env kommen, nie hardcoded.
+        - Slug-Validierung gegen RESERVED_SLUGS prüfen — neue App-Routen
+          brauchen ggf. Erweiterung der Liste.
+        - emailAndPassword.minPasswordLength nicht unter 8 senken.
+        - Session-Lifetime, Trust-Origins, organizationLimit auf
+          Sinnhaftigkeit prüfen.
+
+    - path: "proxy.ts"
+      instructions: |
+        Next 16 Middleware (heißt jetzt proxy):
+        - CORS-Allowlist niemals durch Wildcard "*" ersetzen.
+        - Vercel-Preview-Regex muss eng bleiben (kein .vercel.app-Wildcard ohne
+          subdomain-Constraint).
+        - Bei Erweiterung des matcher: nicht versehentlich /api/auth/* mit
+          erfassen — Better Auth setzt eigene Headers.
+
+    - path: "app/api/public/**"
+      instructions: |
+        Öffentliche API:
+        - Auth-Bypass beabsichtigt — also keine sensiblen Felder leaken
+          (kein created_by, kein uploaded_by_email).
+        - Rate-Limiting flaggen, falls noch nicht vorhanden.
+        - Response sollte stabil typisierbar sein (idealerweise via Zod-Schema
+          parsed).
+
+    - path: "app/api/auth/**"
+      instructions: |
+        Better-Auth-Handler:
+        - Hier keine Custom-Logik einbauen — der Handler ist ein Wrapper.
+        - Falls jemand eigene Routen unter /api/auth/* hinzufügt: warnen
+          (kollidiert mit dem catch-all).
+
+    - path: "app/**/*.tsx"
+      instructions: |
+        Next 16 App Router:
+        - cookies() und headers() müssen awaited werden.
+        - Server Actions: useActionState-Signatur ist (prevState, formData),
+          nicht (formData).
+        - Dynamic Rendering wird durch cookies()/headers() automatisch
+          getriggert — keine zusätzliche force-dynamic-Direktive nötig.
+        - Keine Secrets via NEXT_PUBLIC_ exposen.
+
+    - path: "**/upload*.ts"
+      instructions: |
+        File-Uploads:
+        - Magic-Bytes-Check zwingend (nicht nur mimetype).
+        - Max-Size validieren bevor put() aufgerufen wird.
+        - Vercel Blob: addRandomSuffix muss false sein für stabile URLs.
+        - Org-Membership des aktuellen Users prüfen, bevor in fremden
+          orgSlug-Namespace geschrieben wird.
+
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  opt_out: false
+  learnings:
+    scope: "auto"
+  issues:
+    scope: "auto"
+  pull_requests:
+    scope: "auto"
