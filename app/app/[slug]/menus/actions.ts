@@ -130,8 +130,9 @@ export async function deleteMenuAction(
 
   try {
     await del(row.blobUrl);
-  } catch {
-    // Blob existiert vielleicht nicht mehr — DB-Eintrag trotzdem entfernen
+  } catch (err) {
+    console.error('Blob delete failed for', row.blobUrl, err);
+    return { error: 'Blob-Löschung fehlgeschlagen — bitte erneut versuchen' };
   }
 
   await db.delete(menuPdf).where(eq(menuPdf.id, row.id));

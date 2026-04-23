@@ -3,14 +3,30 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { menuPdf, organization } from '@/lib/db/schema';
 import { MENU_CATEGORIES, type MenuCategory } from '@/lib/menu-categories';
+import { rateLimit, clientIp } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await params;
+
+  const ip = clientIp(request.headers);
+  const limit = rateLimit(`menus:${ip}:${slug}`, { capacity: 30, refillPerSecond: 0.5 });
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: 'Zu viele Anfragen' },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(limit.resetInSeconds),
+          'X-RateLimit-Remaining': '0',
+        },
+      },
+    );
+  }
 
   const orgRows = await db
     .select({ id: organization.id, name: organization.name, slug: organization.slug })
