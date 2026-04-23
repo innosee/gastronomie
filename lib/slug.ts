@@ -15,8 +15,8 @@ export function suggestSlug(name: string): string {
     .replace(/[̀-ͯ]/g, '')
     .replace(/ß/g, 'ss')
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 50);
+    .slice(0, 50)
+    .replace(/^-+|-+$/g, '');
 }
 
 export type SlugCheckReason = 'invalid_format' | 'too_short' | 'reserved' | 'taken' | 'ok';

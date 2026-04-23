@@ -46,10 +46,16 @@ export function SetupForm() {
       if (cancelled) return;
       setSlugStatus('checking');
       startTransition(async () => {
-        const result = await checkSlugAction(slug);
-        if (cancelled) return;
-        setSlugStatus(result.status === 'ok' ? 'ok' : 'error');
-        setSlugMessage(result.text);
+        try {
+          const result = await checkSlugAction(slug);
+          if (cancelled) return;
+          setSlugStatus(result.status === 'ok' ? 'ok' : 'error');
+          setSlugMessage(result.text);
+        } catch {
+          if (cancelled) return;
+          setSlugStatus('error');
+          setSlugMessage('Konnte nicht prüfen — versuch es nochmal');
+        }
       });
     }, 300);
     return () => {

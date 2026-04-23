@@ -34,11 +34,12 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
       asResponse: false,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Anmeldung fehlgeschlagen';
+    const message = err instanceof Error ? err.message : '';
     if (message.toLowerCase().includes('invalid')) {
       return { error: 'E-Mail oder Passwort stimmt nicht' };
     }
-    return { error: message };
+    console.error('Login failed:', err);
+    return { error: 'Anmeldung fehlgeschlagen' };
   }
 
   redirect('/');
