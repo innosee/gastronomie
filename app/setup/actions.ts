@@ -72,8 +72,15 @@ export async function setupAction(_prev: SetupState, formData: FormData): Promis
       headers: await headers(),
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Anlage fehlgeschlagen';
-    return { error: message };
+    const normalized = err instanceof Error ? err.message.toLowerCase() : '';
+    if (
+      normalized.includes('slug') &&
+      (normalized.includes('unique') || normalized.includes('already') || normalized.includes('exists'))
+    ) {
+      return { fieldErrors: { slug: SLUG_REASON_TEXT.taken } };
+    }
+    console.error('Organization create failed:', err);
+    return { error: 'Anlage fehlgeschlagen' };
   }
 
   redirect(`/app/${parsed.data.slug}`);

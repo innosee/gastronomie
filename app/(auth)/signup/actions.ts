@@ -36,11 +36,12 @@ export async function signupAction(_prev: SignupState, formData: FormData): Prom
       asResponse: false,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Registrierung fehlgeschlagen';
+    const message = err instanceof Error ? err.message : '';
     if (message.toLowerCase().includes('already')) {
       return { fieldErrors: { email: 'Diese E-Mail ist bereits registriert' } };
     }
-    return { error: message };
+    console.error('Signup failed:', err);
+    return { error: 'Registrierung fehlgeschlagen' };
   }
 
   redirect('/setup');
