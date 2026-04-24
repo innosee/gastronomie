@@ -1,6 +1,7 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { organization } from 'better-auth/plugins';
+import { nextCookies } from 'better-auth/next-js';
 import { db } from './db';
 import { validateSlugFormat, SLUG_REASON_TEXT } from './slug';
 
@@ -34,5 +35,10 @@ export const auth = betterAuth({
         },
       },
     }),
+    // MUSS das letzte Plugin sein — sorgt dafür, dass Better Auth in Server
+    // Actions die Session-Cookie automatisch setzt. Ohne dieses Plugin
+    // bekommen signUp/signIn keine Cookie und der User landet sofort wieder
+    // auf /login.
+    nextCookies(),
   ],
 });
