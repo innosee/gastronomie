@@ -1,15 +1,9 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { organization } from 'better-auth/plugins';
+import { nextCookies } from 'better-auth/next-js';
 import { db } from './db';
-
-const RESERVED_SLUGS = new Set([
-  'api', 'admin', 'dashboard', 'login', 'signup', 'logout',
-  'settings', 'account', 'billing', 'pricing', 'about',
-  'docs', 'help', 'support', 'public', 'static', '_next',
-  'auth', 'organization', 'organizations', 'user', 'users',
-  'app', 'www', 'mail', 'cms',
-]);
+import { validateSlugFormat, SLUG_REASON_TEXT } from './slug';
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: 'pg' }),
@@ -33,15 +27,18 @@ export const auth = betterAuth({
       organizationCreation: {
         beforeCreate: async ({ organization: org }: { organization: { name: string; slug: string } }) => {
           const slug = org.slug?.toLowerCase().trim() ?? '';
-          if (!/^[a-z0-9](?:[a-z0-9-]{1,48}[a-z0-9])?$/.test(slug)) {
-            throw new Error('Ungültiger Slug — nur a-z, 0-9, Bindestrich (3–50 Zeichen)');
-          }
-          if (RESERVED_SLUGS.has(slug)) {
-            throw new Error(`Slug "${slug}" ist reserviert`);
+          const status = validateSlugFormat(slug);
+          if (status !== 'ok') {
+            throw new Error(SLUG_REASON_TEXT[status]);
           }
           return { data: { ...org, slug } };
         },
       },
     }),
+    // MUSS das letzte Plugin sein — sorgt dafür, dass Better Auth in Server
+    // Actions die Session-Cookie automatisch setzt. Ohne dieses Plugin
+    // bekommen signUp/signIn keine Cookie und der User landet sofort wieder
+    // auf /login.
+    nextCookies(),
   ],
 });
