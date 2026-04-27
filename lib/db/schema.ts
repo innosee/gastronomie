@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, integer, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, integer, bigint, index, uniqueIndex } from 'drizzle-orm/pg-core';
 
 export const user = pgTable('user', {
   id: text('id').primaryKey(),
@@ -96,7 +96,7 @@ export const menuPdf = pgTable(
     category: text('category').notNull(),
     blobKey: text('blob_key').notNull(),
     blobUrl: text('blob_url').notNull(),
-    version: integer('version').notNull(),
+    version: bigint('version', { mode: 'number' }).notNull(),
     fileSize: integer('file_size').notNull(),
     uploadedBy: text('uploaded_by').references(() => user.id, { onDelete: 'set null' }),
     uploadedByEmail: text('uploaded_by_email'),
