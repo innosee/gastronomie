@@ -3,7 +3,7 @@ export const RESERVED_SLUGS = new Set([
   'settings', 'account', 'billing', 'pricing', 'about',
   'docs', 'help', 'support', 'public', 'static', '_next',
   'auth', 'organization', 'organizations', 'user', 'users',
-  'app', 'www', 'mail', 'cms', 'setup', 'onboarding',
+  'app', 'www', 'mail', 'cms', 'setup', 'onboarding', 'billing',
 ]);
 
 const SLUG_REGEX = /^[a-z0-9](?:[a-z0-9-]{1,48}[a-z0-9])?$/;

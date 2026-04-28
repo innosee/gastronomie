@@ -7,6 +7,7 @@ import { eq, and } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { member, menuPdf, organization } from '@/lib/db/schema';
 import { getSession } from '@/lib/auth-helpers';
+import { canManageMenus, getActiveSubscription } from '@/lib/billing';
 import {
   MAX_PDF_SIZE_BYTES,
   PDF_MAGIC_BYTES,
@@ -57,6 +58,11 @@ export async function uploadMenuAction(
 
   const org = await loadMembership(slug, session.user.id);
   if (!org) return { error: 'Kein Zugriff auf dieses Restaurant' };
+
+  const sub = await getActiveSubscription(org.orgId);
+  if (!canManageMenus(sub)) {
+    return { error: 'Bitte schließe ein Abo ab, um Karten zu verwalten.' };
+  }
 
   const blobKey = `${org.orgSlug}/${category}.pdf`;
   let blobUrl: string;
@@ -118,6 +124,11 @@ export async function deleteMenuAction(
 
   const org = await loadMembership(slug, session.user.id);
   if (!org) return { error: 'Kein Zugriff auf dieses Restaurant' };
+
+  const sub = await getActiveSubscription(org.orgId);
+  if (!canManageMenus(sub)) {
+    return { error: 'Bitte schließe ein Abo ab, um Karten zu verwalten.' };
+  }
 
   const existing = await db
     .select({ id: menuPdf.id, blobUrl: menuPdf.blobUrl })

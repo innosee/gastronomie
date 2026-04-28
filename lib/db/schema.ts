@@ -8,6 +8,7 @@ export const user = pgTable('user', {
   image: text('image'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  stripeCustomerId: text('stripe_customer_id'),
 });
 
 export const session = pgTable('session', {
@@ -54,6 +55,7 @@ export const organization = pgTable('organization', {
   logo: text('logo'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   metadata: text('metadata'),
+  stripeCustomerId: text('stripe_customer_id'),
 });
 
 export const member = pgTable(
@@ -85,6 +87,33 @@ export const invitation = pgTable('invitation', {
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
 });
+
+export const subscription = pgTable(
+  'subscription',
+  {
+    id: text('id').primaryKey(),
+    plan: text('plan').notNull(),
+    referenceId: text('reference_id').notNull(),
+    stripeCustomerId: text('stripe_customer_id'),
+    stripeSubscriptionId: text('stripe_subscription_id'),
+    status: text('status').notNull().default('incomplete'),
+    periodStart: timestamp('period_start'),
+    periodEnd: timestamp('period_end'),
+    trialStart: timestamp('trial_start'),
+    trialEnd: timestamp('trial_end'),
+    cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
+    cancelAt: timestamp('cancel_at'),
+    canceledAt: timestamp('canceled_at'),
+    endedAt: timestamp('ended_at'),
+    seats: integer('seats'),
+    billingInterval: text('billing_interval'),
+    stripeScheduleId: text('stripe_schedule_id'),
+  },
+  (t) => [
+    index('subscription_reference_idx').on(t.referenceId),
+    index('subscription_stripe_sub_idx').on(t.stripeSubscriptionId),
+  ],
+);
 
 export const menuPdf = pgTable(
   'menu_pdf',
