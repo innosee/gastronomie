@@ -5,7 +5,11 @@ import { menuPdf, organization } from '@/lib/db/schema';
 import { MENU_CATEGORIES, type MenuCategory } from '@/lib/menu-categories';
 import { rateLimit, clientIp } from '@/lib/rate-limit';
 
-export const dynamic = 'force-dynamic';
+// Vercel-CDN cached die Response 60 s und serviert sie weitere 5 Min stale,
+// während im Hintergrund revalidiert wird. Drückt die Neon-DB-Last drastisch:
+// statt einer DB-Query pro Request gibt es höchstens eine pro Minute, egal
+// wie viele Clients (Kaiser-ISR, Bots, direkte Besucher) anfragen.
+const CACHE_CONTROL = 'public, s-maxage=60, stale-while-revalidate=300';
 
 export async function GET(
   request: Request,
@@ -36,7 +40,10 @@ export async function GET(
 
   const org = orgRows[0];
   if (!org) {
-    return NextResponse.json({ error: 'Restaurant nicht gefunden' }, { status: 404 });
+    return NextResponse.json(
+      { error: 'Restaurant nicht gefunden' },
+      { status: 404, headers: { 'Cache-Control': 'public, s-maxage=300' } },
+    );
   }
 
   const pdfs = await db
@@ -51,18 +58,21 @@ export async function GET(
 
   const byCategory = new Map(pdfs.map((p) => [p.category as MenuCategory, p]));
 
-  return NextResponse.json({
-    restaurant: { name: org.name, slug: org.slug },
-    menus: MENU_CATEGORIES.map((category) => {
-      const row = byCategory.get(category);
-      return row
-        ? {
-            category,
-            url: row.blobUrl,
-            version: row.version,
-            updatedAt: row.uploadedAt.toISOString(),
-          }
-        : { category, url: null, version: null, updatedAt: null };
-    }),
-  });
+  return NextResponse.json(
+    {
+      restaurant: { name: org.name, slug: org.slug },
+      menus: MENU_CATEGORIES.map((category) => {
+        const row = byCategory.get(category);
+        return row
+          ? {
+              category,
+              url: row.blobUrl,
+              version: row.version,
+              updatedAt: row.uploadedAt.toISOString(),
+            }
+          : { category, url: null, version: null, updatedAt: null };
+      }),
+    },
+    { headers: { 'Cache-Control': CACHE_CONTROL } },
+  );
 }
