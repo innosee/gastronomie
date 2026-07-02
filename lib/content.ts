@@ -6,9 +6,13 @@
 import type {
   ContentField,
   ContentSchema,
+  ContentValue,
+  FieldType,
+  ImageValue,
   MediaRef,
   RawContentValue,
   RawListItem,
+  ResolvedListItem,
   SubField,
 } from './content-schema/types';
 
@@ -95,6 +99,65 @@ export function collectMediaIds(value: RawContentValue): string[] {
   };
   visit(value);
   return ids;
+}
+
+// ---------------------------------------------------------------------------
+// Auflösung roh → öffentlich (mediaId → ImageValue) für die GET /content-Route
+// ---------------------------------------------------------------------------
+
+function resolveByType(
+  type: FieldType,
+  subFields: SubField[] | undefined,
+  raw: unknown,
+  images: Map<string, ImageValue>,
+): ContentValue {
+  switch (type) {
+    case 'boolean':
+      return raw === true;
+    case 'image':
+      return isMediaRef(raw) ? (images.get(raw.mediaId) ?? null) : null;
+    case 'gallery':
+      return Array.isArray(raw)
+        ? raw
+            .filter(isMediaRef)
+            .map((r) => images.get(r.mediaId))
+            .filter((img): img is ImageValue => !!img)
+        : [];
+    case 'list': {
+      if (!Array.isArray(raw) || !subFields) return [];
+      return raw.map((item) => {
+        const obj = item && typeof item === 'object' ? (item as Record<string, unknown>) : {};
+        const resolved: ResolvedListItem = {};
+        for (const sub of subFields) {
+          // Unterfelder sind nie 'list' → Ergebnis passt in ResolvedListItem.
+          resolved[sub.key] = resolveByType(
+            sub.type,
+            undefined,
+            obj[sub.key],
+            images,
+          ) as ResolvedListItem[string];
+        }
+        return resolved;
+      });
+    }
+    default:
+      return typeof raw === 'string' ? raw : '';
+  }
+}
+
+// Löst eine komplette (roh gemergte) Content-Map in den öffentlichen Contract
+// auf: Bilder werden zu { url, alt, width, height }, fehlende/gelöschte Bilder
+// fallen weg (Galerie) bzw. werden null (Einzelbild).
+export function resolveContent(
+  schema: ContentSchema,
+  raw: Record<string, RawContentValue>,
+  images: Map<string, ImageValue>,
+): Record<string, ContentValue> {
+  const out: Record<string, ContentValue> = {};
+  for (const field of schema.fields) {
+    out[field.key] = resolveByType(field.type, field.fields, raw[field.key], images);
+  }
+  return out;
 }
 
 // Legt für jeden Schema-Key den aktuell zu editierenden Wert fest:
