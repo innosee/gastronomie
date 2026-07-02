@@ -4,6 +4,7 @@ import { organization } from 'better-auth/plugins';
 import { nextCookies } from 'better-auth/next-js';
 import { db } from './db';
 import { validateSlugFormat, SLUG_REASON_TEXT } from './slug';
+import { ac, roles } from './permissions';
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: 'pg' }),
@@ -19,6 +20,10 @@ export const auth = betterAuth({
       allowUserToCreateOrganization: true,
       organizationLimit: 5,
       creatorRole: 'owner',
+      // Eigene Rollen inkl. 'editor' (Redakteur). Muss identisch im Client
+      // (lib/auth-client.ts) gesetzt sein, sonst inferiert der Client falsch.
+      ac,
+      roles,
       schema: {
         organization: {
           additionalFields: {},
