@@ -7,6 +7,7 @@ import { eq, and } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { member, menuPdf, organization } from '@/lib/db/schema';
 import { getSession } from '@/lib/auth-helpers';
+import { canEditContent } from '@/lib/permissions';
 import {
   MAX_PDF_SIZE_BYTES,
   PDF_MAGIC_BYTES,
@@ -16,9 +17,11 @@ import {
 
 export type UploadState = { error?: string; success?: boolean } | null;
 
-async function loadMembership(slug: string, userId: string) {
+// Lädt die Mitgliedschaft inkl. Rolle. Karten zählen als Inhalt: Owner, Admin
+// und Redakteur (editor) dürfen schreiben, ein reines 'member' nicht.
+async function loadEditableMembership(slug: string, userId: string) {
   const rows = await db
-    .select({ orgId: organization.id, orgSlug: organization.slug })
+    .select({ orgId: organization.id, orgSlug: organization.slug, role: member.role })
     .from(organization)
     .innerJoin(
       member,
@@ -26,7 +29,9 @@ async function loadMembership(slug: string, userId: string) {
     )
     .where(eq(organization.slug, slug))
     .limit(1);
-  return rows[0] ?? null;
+  const row = rows[0];
+  if (!row || !canEditContent(row.role)) return null;
+  return row;
 }
 
 export async function uploadMenuAction(
@@ -55,7 +60,7 @@ export async function uploadMenuAction(
     return { error: 'Keine gültige PDF-Datei' };
   }
 
-  const org = await loadMembership(slug, session.user.id);
+  const org = await loadEditableMembership(slug, session.user.id);
   if (!org) return { error: 'Kein Zugriff auf dieses Restaurant' };
 
   const blobKey = `${org.orgSlug}/${category}.pdf`;
@@ -116,7 +121,7 @@ export async function deleteMenuAction(
     return { error: 'Unbekannte Kategorie' };
   }
 
-  const org = await loadMembership(slug, session.user.id);
+  const org = await loadEditableMembership(slug, session.user.id);
   if (!org) return { error: 'Kein Zugriff auf dieses Restaurant' };
 
   const existing = await db
