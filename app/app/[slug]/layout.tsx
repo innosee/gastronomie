@@ -60,6 +60,14 @@ export default async function AppLayout({
             </Link>
             {isEditor && (
               <Link
+                href={`/app/${org.orgSlug}/content`}
+                className="rounded-md px-2.5 py-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                Inhalte
+              </Link>
+            )}
+            {isEditor && (
+              <Link
                 href={`/app/${org.orgSlug}/media`}
                 className="rounded-md px-2.5 py-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
               >

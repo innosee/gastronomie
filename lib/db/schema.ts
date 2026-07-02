@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, integer, bigint, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, integer, bigint, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core';
 
 export const user = pgTable('user', {
   id: text('id').primaryKey(),
@@ -85,6 +85,24 @@ export const invitation = pgTable('invitation', {
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
 });
+
+export const content = pgTable(
+  'content',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    // Feld-Key aus dem Content-Schema, z. B. "home.hero.headline".
+    key: text('key').notNull(),
+    // Je nach Feldtyp: String, boolean, { mediaId }, { mediaId }[] (Galerie)
+    // oder Objekt-Listen (z. B. Zimmer, Home-Sections). Siehe lib/content-schema.
+    data: jsonb('data').notNull(),
+    updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('content_org_key_unique').on(t.organizationId, t.key)],
+);
 
 export const media = pgTable(
   'media',
