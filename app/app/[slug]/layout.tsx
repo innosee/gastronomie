@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { db } from '@/lib/db';
 import { member, organization } from '@/lib/db/schema';
 import { getSession } from '@/lib/auth-helpers';
-import { canManageOrg, ROLE_LABELS } from '@/lib/permissions';
+import { canEditContent, canManageOrg, ROLE_LABELS } from '@/lib/permissions';
 import { logoutAction } from './actions';
 
 export default async function AppLayout({
@@ -39,6 +39,7 @@ export default async function AppLayout({
   if (!org) notFound();
 
   const isManager = canManageOrg(org.role);
+  const isEditor = canEditContent(org.role);
 
   return (
     <div className="min-h-dvh bg-muted/30 flex flex-col">
@@ -57,6 +58,14 @@ export default async function AppLayout({
             >
               Karten
             </Link>
+            {isEditor && (
+              <Link
+                href={`/app/${org.orgSlug}/media`}
+                className="rounded-md px-2.5 py-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                Medien
+              </Link>
+            )}
             {isManager && (
               <Link
                 href={`/app/${org.orgSlug}/members`}

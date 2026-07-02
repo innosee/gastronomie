@@ -86,6 +86,31 @@ export const invitation = pgTable('invitation', {
     .references(() => user.id, { onDelete: 'cascade' }),
 });
 
+export const media = pgTable(
+  'media',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    blobKey: text('blob_key').notNull(),
+    blobUrl: text('blob_url').notNull(),
+    alt: text('alt'),
+    width: integer('width'),
+    height: integer('height'),
+    fileSize: integer('file_size').notNull(),
+    contentType: text('content_type').notNull(),
+    uploadedBy: text('uploaded_by').references(() => user.id, { onDelete: 'set null' }),
+    uploadedByEmail: text('uploaded_by_email'),
+    uploadedAt: timestamp('uploaded_at').notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at'),
+  },
+  (t) => [
+    index('media_org_idx').on(t.organizationId),
+    index('media_deleted_idx').on(t.deletedAt),
+  ],
+);
+
 export const menuPdf = pgTable(
   'menu_pdf',
   {
