@@ -51,12 +51,25 @@ export async function revalidateSite(slug: string): Promise<void> {
       },
       body: JSON.stringify({ slug }),
       cache: 'no-store',
+      // KEINEN Redirects folgen. Node/undici entfernt den Authorization-Header
+      // beim Cross-Origin-Redirect (Fetch-Standard, gegen Credential-Leaks) —
+      // und freiburgerkaiser.de leitet per 308 auf www. um, was eine andere
+      // Origin ist. Eine URL ohne 'www' würde also ohne Token ankommen, 401
+      // kassieren und STILL scheitern. Mit 'error' knallt es stattdessen sicht-
+      // bar im Log, statt ein totes Feature vorzutäuschen.
+      redirect: 'error',
       signal: AbortSignal.timeout(5000),
     });
     if (!response.ok) {
-      console.warn(`Revalidate-Hook für ${slug} antwortete mit ${response.status}`);
+      console.warn(
+        `Revalidate-Hook für ${slug} antwortete mit ${response.status} — ` +
+          `zeigt die URL auf den finalen Host (inkl. www)?`,
+      );
     }
   } catch (error) {
-    console.warn(`Revalidate-Hook für ${slug} fehlgeschlagen:`, error);
+    console.warn(
+      `Revalidate-Hook für ${slug} fehlgeschlagen (Redirect? Timeout?):`,
+      error,
+    );
   }
 }
