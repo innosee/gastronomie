@@ -1,18 +1,112 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
+  diffMenus,
   emptyCategory,
   emptyItem,
+  type MenuChange,
   type StoredCategory,
   type StoredItem,
   type StoredMenu,
 } from '@/lib/menu-data';
-import { saveMenuAction, seedMenuAction } from './actions';
+import {
+  discardDraftAction,
+  publishMenuAction,
+  saveMenuAction,
+  seedMenuAction,
+} from './actions';
+
+const formatDateTime = (iso: string) =>
+  new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' }).format(
+    new Date(iso),
+  );
+
+const CHANGE_STYLES: Record<MenuChange['kind'], { label: string; className: string }> = {
+  added: { label: 'Neu', className: 'bg-emerald-100 text-emerald-900' },
+  removed: { label: 'Entfernt', className: 'bg-red-100 text-red-900' },
+  changed: { label: 'Geändert', className: 'bg-amber-100 text-amber-900' },
+  visibility: { label: 'Sichtbarkeit', className: 'bg-blue-100 text-blue-900' },
+  order: { label: 'Reihenfolge', className: 'bg-muted text-muted-foreground' },
+};
+
+// Der finale Check vor dem Livegang: zeigt genau das, was sich gegenüber der
+// veröffentlichten Karte ändert — erst danach geht es auf die Website.
+function PublishDialog({
+  changes,
+  isFirstPublish,
+  isPublishing,
+  onCancel,
+  onConfirm,
+}: {
+  changes: MenuChange[];
+  isFirstPublish: boolean;
+  isPublishing: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={onCancel}
+    >
+      <div
+        className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-lg bg-background shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="border-b px-5 py-4">
+          <h2 className="text-base font-semibold">Änderungen prüfen</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {isFirstPublish
+              ? 'Die Speisekarte war noch nie live. Damit geht sie zum ersten Mal auf die Website.'
+              : `Das geht auf die Website — ${changes.length} ${
+                  changes.length === 1 ? 'Änderung' : 'Änderungen'
+                } gegenüber der aktuell veröffentlichten Karte.`}
+          </p>
+        </div>
+
+        <div className="flex-1 space-y-1.5 overflow-y-auto px-5 py-4">
+          {changes.map((change, index) => {
+            const style = CHANGE_STYLES[change.kind];
+            return (
+              <div
+                key={index}
+                className="flex items-start gap-3 rounded-md border px-3 py-2 text-sm"
+              >
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${style.className}`}
+                >
+                  {style.label}
+                </span>
+                <div className="min-w-0">
+                  <p className="font-medium">{change.scope}</p>
+                  {change.detail && (
+                    <p className="text-xs text-muted-foreground">{change.detail}</p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t px-5 py-4">
+          <Button type="button" variant="ghost" onClick={onCancel} disabled={isPublishing}>
+            Abbrechen
+          </Button>
+          <Button type="button" onClick={onConfirm} disabled={isPublishing}>
+            {isPublishing ? 'Wird veröffentlicht…' : 'Ja, jetzt live stellen'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function move<T>(arr: T[], from: number, to: number): T[] {
   if (to < 0 || to >= arr.length) return arr;
@@ -25,18 +119,63 @@ function move<T>(arr: T[], from: number, to: number): T[] {
 export function MenuEditor({
   slug,
   initialMenu,
+  publishedMenu,
+  publishedAt,
   hasSavedMenu,
 }: {
   slug: string;
   initialMenu: StoredMenu;
+  publishedMenu: StoredMenu | null;
+  publishedAt: string | null;
   hasSavedMenu: boolean;
 }) {
   const [menu, setMenu] = useState<StoredMenu>(initialMenu);
+  // Der zuletzt veröffentlichte Stand — lokal mitgeführt, damit die
+  // Änderungsliste nach einer Freigabe sofort wieder leer ist.
+  const [published, setPublished] = useState<StoredMenu | null>(publishedMenu);
+  const [publishedOn, setPublishedOn] = useState<string | null>(publishedAt);
   const [openCategories, setOpenCategories] = useState<Set<number>>(new Set());
+  const [showPublish, setShowPublish] = useState(false);
   const [isSaving, startSave] = useTransition();
   const [isSeeding, startSeed] = useTransition();
+  const [isPublishing, startPublish] = useTransition();
+  const [isDiscarding, startDiscard] = useTransition();
 
   const categories = menu.categories;
+
+  // Was würde durch eine Freigabe live gehen?
+  const changes = useMemo(() => diffMenus(published, menu), [published, menu]);
+  const hasChanges = changes.length > 0;
+
+  function handlePublish() {
+    startPublish(async () => {
+      const result = await publishMenuAction(slug, JSON.stringify(menu));
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
+      // Entwurf ist jetzt der veröffentlichte Stand → Änderungsliste ist leer.
+      setPublished(menu);
+      setPublishedOn(new Date().toISOString());
+      setShowPublish(false);
+      toast.success('Speisekarte ist live');
+    });
+  }
+
+  function handleDiscard() {
+    if (!confirm('Alle unveröffentlichten Änderungen verwerfen?')) return;
+    startDiscard(async () => {
+      const result = await discardDraftAction(slug);
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
+      if (result?.menu) {
+        setMenu(result.menu);
+        toast.success('Entwurf verworfen — zurück auf den Live-Stand');
+      }
+    });
+  }
 
   function setCategories(next: StoredCategory[]) {
     setMenu({ categories: next });
@@ -59,7 +198,7 @@ export function MenuEditor({
     startSave(async () => {
       const result = await saveMenuAction(slug, JSON.stringify(menu));
       if (result?.error) toast.error(result.error);
-      else toast.success('Speisekarte gespeichert');
+      else toast.success('Entwurf gespeichert — noch nicht live');
     });
   }
 
@@ -83,26 +222,76 @@ export function MenuEditor({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-background px-4 py-3">
-        <p className="text-sm text-muted-foreground">
-          {categories.length} Kategorien ·{' '}
-          {categories.reduce((sum, c) => sum + c.items.length, 0)} Gerichte
-        </p>
-        <div className="flex items-center gap-2">
+      <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-background px-4 py-3 shadow-sm">
+        <div className="space-y-0.5">
+          <p className="text-sm">
+            {hasChanges ? (
+              <span className="font-medium text-foreground">
+                {changes.length} {changes.length === 1 ? 'Änderung' : 'Änderungen'} noch nicht
+                live
+              </span>
+            ) : (
+              <span className="font-medium text-muted-foreground">
+                {published ? 'Alles veröffentlicht' : 'Noch nichts veröffentlicht'}
+              </span>
+            )}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {categories.length} Kategorien ·{' '}
+            {categories.reduce((sum, c) => sum + c.items.length, 0)} Gerichte
+            {publishedOn && ` · zuletzt live: ${formatDateTime(publishedOn)}`}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => setCategories([...categories, emptyCategory()])}
+            disabled={isSaving || isPublishing}
+          >
+            Kategorie hinzufügen
+          </Button>
+          {published && hasChanges && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={handleDiscard}
+              disabled={isDiscarding || isPublishing}
+            >
+              Entwurf verwerfen
+            </Button>
+          )}
           <Button
             type="button"
             size="sm"
             variant="secondary"
-            onClick={() => setCategories([...categories, emptyCategory()])}
-            disabled={isSaving}
+            onClick={handleSave}
+            disabled={isSaving || isPublishing}
           >
-            Kategorie hinzufügen
+            {isSaving ? 'Speichert…' : 'Entwurf speichern'}
           </Button>
-          <Button type="button" size="sm" onClick={handleSave} disabled={isSaving}>
-            {isSaving ? 'Speichert…' : 'Speichern'}
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => setShowPublish(true)}
+            disabled={!hasChanges || isPublishing}
+          >
+            Prüfen &amp; veröffentlichen
           </Button>
         </div>
       </div>
+
+      {showPublish && (
+        <PublishDialog
+          changes={changes}
+          isFirstPublish={!published}
+          isPublishing={isPublishing}
+          onCancel={() => setShowPublish(false)}
+          onConfirm={handlePublish}
+        />
+      )}
 
       {isEmpty && !hasSavedMenu && (
         <Card>

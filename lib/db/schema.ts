@@ -99,9 +99,16 @@ export const menu = pgTable(
     organizationId: text('organization_id')
       .notNull()
       .references(() => organization.id, { onDelete: 'cascade' }),
+    // Entwurf: was der Redakteur bearbeitet. Wird durch Speichern geändert und
+    // ist NICHT öffentlich sichtbar.
     data: jsonb('data').notNull(),
     updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    // Veröffentlichter Stand: exakt das, was die öffentliche Route ausliefert.
+    // null = noch nie freigegeben → die API liefert eine leere Karte.
+    publishedData: jsonb('published_data'),
+    publishedBy: text('published_by').references(() => user.id, { onDelete: 'set null' }),
+    publishedAt: timestamp('published_at'),
   },
   (t) => [uniqueIndex('menu_org_unique').on(t.organizationId)],
 );
