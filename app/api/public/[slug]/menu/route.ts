@@ -16,9 +16,19 @@ import { menu, organization } from '@/lib/db/schema';
 import { safeParseStoredMenu, toMenuData, EMPTY_MENU } from '@/lib/menu-data';
 import { rateLimit, clientIp } from '@/lib/rate-limit';
 
-// Wie bei /menus: CDN cached 60 s und serviert 5 Min stale, während im
-// Hintergrund revalidiert wird — hält die Neon-DB-Last niedrig.
-const CACHE_CONTROL = 'public, s-maxage=60, stale-while-revalidate=300';
+// Kurzes CDN-Fenster und BEWUSST kein stale-while-revalidate.
+//
+// Hintergrund: Nach einer Freigabe stößt das CMS per Webhook sofort ein
+// Revalidate der Website an. Die baut ihre Seite dann neu — und holt sich die
+// Karte dabei über genau diese Route. Mit stale-while-revalidate würde das CDN
+// in genau diesem Moment noch die ALTE Antwort ausliefern (und erst im
+// Hintergrund auffrischen); die Site würde also den alten Stand einbacken und
+// die Freigabe schlüge erst beim nächsten ISR-Fenster durch — der Webhook wäre
+// wirkungslos. Ohne SWR revalidiert das CDN synchron → die Antwort ist frisch.
+//
+// DB-Last bleibt trotzdem gedeckelt: höchstens ~6 Origin-Anfragen pro Minute,
+// egal wie viele Clients anfragen.
+const CACHE_CONTROL = 'public, s-maxage=10';
 
 export async function GET(
   request: Request,
