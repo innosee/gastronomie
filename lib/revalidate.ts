@@ -34,13 +34,25 @@ function loadHooks(): Record<string, Hook> {
   }
 }
 
+// 'ok'      → Website wurde angestoßen, Änderung ist in Sekunden sichtbar
+// 'skipped' → für diese Org ist kein Hook konfiguriert
+// 'failed'  → Hook konfiguriert, aber nicht erreichbar/abgelehnt
+export type RevalidateResult = 'ok' | 'skipped' | 'failed';
+
 // Bewusst "best effort": schlägt der Hook fehl, ist das KEIN Fehler der Freigabe.
 // Die Karte ist in der DB veröffentlicht und die Site zieht sie spätestens beim
 // nächsten ISR-Fenster (~60 s). Ein kaputter Webhook darf den Redakteur nicht
-// blockieren — deshalb wird hier nur geloggt, nie geworfen.
-export async function revalidateSite(slug: string): Promise<void> {
+// blockieren — deshalb wird hier nie geworfen.
+//
+// Das Ergebnis wird aber zurückgegeben und dem Redakteur angezeigt. Ein still
+// scheiternder Hook ist die schlimmste Variante: das Feature sieht funktionsfähig
+// aus, tut aber nichts.
+export async function revalidateSite(slug: string): Promise<RevalidateResult> {
   const hook = loadHooks()[slug];
-  if (!hook) return;
+  if (!hook) {
+    console.info(`Kein Revalidate-Hook für "${slug}" konfiguriert — übersprungen`);
+    return 'skipped';
+  }
 
   try {
     const response = await fetch(hook.url, {
@@ -65,11 +77,14 @@ export async function revalidateSite(slug: string): Promise<void> {
         `Revalidate-Hook für ${slug} antwortete mit ${response.status} — ` +
           `zeigt die URL auf den finalen Host (inkl. www)?`,
       );
+      return 'failed';
     }
+    return 'ok';
   } catch (error) {
     console.warn(
       `Revalidate-Hook für ${slug} fehlgeschlagen (Redirect? Timeout?):`,
       error,
     );
+    return 'failed';
   }
 }

@@ -8,9 +8,15 @@ import { member, menu, organization } from '@/lib/db/schema';
 import { getSession } from '@/lib/auth-helpers';
 import { storedMenuSchema, type StoredMenu } from '@/lib/menu-data';
 import { kaiserMenuSeed } from '@/lib/menu-seed/kaiser';
-import { revalidateSite } from '@/lib/revalidate';
+import { revalidateSite, type RevalidateResult } from '@/lib/revalidate';
 
 export type MenuState = { error?: string; success?: boolean } | null;
+
+// Bei der Freigabe zusätzlich: hat die Website den Anstoß bekommen? 'ok' heißt
+// in Sekunden sichtbar, sonst greift erst das ISR-Netz (~1 Min).
+export type PublishState =
+  | { error?: string; success?: boolean; revalidated?: RevalidateResult }
+  | null;
 
 // Die Seed-Action gibt die geladene Karte zurück, damit der Editor sie direkt
 // in seinen State übernehmen kann. revalidatePath allein reicht nicht: die
@@ -79,7 +85,7 @@ export async function saveMenuAction(slug: string, json: string): Promise<MenuSt
 // Freigabe: speichert den Entwurf UND setzt ihn in einem Rutsch live. Dadurch
 // ist ausgeschlossen, dass etwas anderes live geht als das, was der Redakteur
 // im Freigabe-Dialog gesehen hat.
-export async function publishMenuAction(slug: string, json: string): Promise<MenuState> {
+export async function publishMenuAction(slug: string, json: string): Promise<PublishState> {
   const session = await getSession();
   if (!session) redirect('/login');
 
@@ -118,9 +124,10 @@ export async function publishMenuAction(slug: string, json: string): Promise<Men
   // Der Website Bescheid sagen, damit die Änderung sofort erscheint statt erst
   // beim nächsten ISR-Fenster. Best effort — schlägt der Hook fehl, ist die
   // Karte trotzdem veröffentlicht und wird spätestens in ~60 s ausgespielt.
-  await revalidateSite(slug);
+  // Das Ergebnis geht an den Editor, damit ein stiller Fehlschlag auffällt.
+  const revalidated = await revalidateSite(slug);
 
-  return { success: true };
+  return { success: true, revalidated };
 }
 
 // Entwurf verwerfen: zurück auf den zuletzt veröffentlichten Stand.

@@ -158,7 +158,17 @@ export function MenuEditor({
       setPublished(menu);
       setPublishedOn(new Date().toISOString());
       setShowPublish(false);
-      toast.success('Speisekarte ist live');
+
+      // Ehrlich sein, wie schnell es wirklich sichtbar wird: Kam der Anstoß bei
+      // der Website an, dauert es Sekunden — sonst greift erst das ISR-Netz.
+      if (result?.revalidated === 'ok') {
+        toast.success('Speisekarte ist live — in wenigen Sekunden auf der Website');
+      } else {
+        toast.success('Speisekarte veröffentlicht', {
+          description:
+            'Die Website konnte nicht sofort benachrichtigt werden — die Änderung erscheint dort innerhalb von etwa einer Minute.',
+        });
+      }
     });
   }
 
