@@ -25,13 +25,18 @@ export default async function MenuPage({ params }: { params: Promise<{ slug: str
   if (!org) notFound();
 
   const rows = await db
-    .select({ data: menu.data, updatedAt: menu.updatedAt })
+    .select({
+      data: menu.data,
+      publishedData: menu.publishedData,
+      publishedAt: menu.publishedAt,
+    })
     .from(menu)
     .where(eq(menu.organizationId, org.id))
     .limit(1);
 
   const row = rows[0];
-  const stored = row ? safeParseStoredMenu(row.data) : EMPTY_MENU;
+  const draft = row ? safeParseStoredMenu(row.data) : EMPTY_MENU;
+  const published = row?.publishedData ? safeParseStoredMenu(row.publishedData) : null;
 
   return (
     <div className="space-y-6">
@@ -39,11 +44,17 @@ export default async function MenuPage({ params }: { params: Promise<{ slug: str
         <h1 className="text-2xl font-semibold tracking-tight">Speisekarte</h1>
         <p className="text-sm text-muted-foreground">
           Die à-la-carte-Karte, die auf der Website als filterbare Karte erscheint.
-          Ausgeblendete Kategorien (z. B. Saisonkarten) bleiben erhalten, werden aber
-          nicht ausgespielt.
+          Änderungen gehen erst live, wenn du sie freigibst. Ausgeblendete Kategorien
+          (z. B. Saisonkarten) bleiben erhalten, werden aber nicht ausgespielt.
         </p>
       </div>
-      <MenuEditor slug={slug} initialMenu={stored} hasSavedMenu={!!row} />
+      <MenuEditor
+        slug={slug}
+        initialMenu={draft}
+        publishedMenu={published}
+        publishedAt={row?.publishedAt?.toISOString() ?? null}
+        hasSavedMenu={!!row}
+      />
     </div>
   );
 }

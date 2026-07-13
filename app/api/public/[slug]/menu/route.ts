@@ -58,15 +58,18 @@ export async function GET(
     );
   }
 
+  // Bewusst NUR der veröffentlichte Stand — der Entwurf (menu.data) ist nicht
+  // öffentlich. Erst eine Freigabe im Dashboard macht Änderungen hier sichtbar.
   const rows = await db
-    .select({ data: menu.data })
+    .select({ publishedData: menu.publishedData })
     .from(menu)
     .where(eq(menu.organizationId, org.id))
     .limit(1);
 
-  const stored = rows[0] ? safeParseStoredMenu(rows[0].data) : EMPTY_MENU;
+  const published = rows[0]?.publishedData;
+  const stored = published ? safeParseStoredMenu(published) : EMPTY_MENU;
 
-  // Noch keine Karte gepflegt → leere categories. Die Template-Site fällt
+  // Noch nichts freigegeben → leere categories. Die Template-Site fällt
   // darauf definiert auf ihre statische Karte zurück.
   return NextResponse.json(
     {

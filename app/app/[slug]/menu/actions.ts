@@ -30,28 +30,7 @@ async function loadMembership(slug: string, userId: string) {
   return rows[0] ?? null;
 }
 
-async function upsertMenu(orgId: string, userId: string, data: unknown) {
-  await db
-    .insert(menu)
-    .values({
-      id: crypto.randomUUID(),
-      organizationId: orgId,
-      data,
-      updatedBy: userId,
-    })
-    .onConflictDoUpdate({
-      target: menu.organizationId,
-      set: { data, updatedBy: userId, updatedAt: new Date() },
-    });
-}
-
-export async function saveMenuAction(slug: string, json: string): Promise<MenuState> {
-  const session = await getSession();
-  if (!session) redirect('/login');
-
-  const org = await loadMembership(slug, session.user.id);
-  if (!org) return { error: 'Kein Zugriff auf dieses Restaurant' };
-
+function validate(json: string): { menu: StoredMenu } | { error: string } {
   let payload: unknown;
   try {
     payload = JSON.parse(json);
@@ -61,18 +40,113 @@ export async function saveMenuAction(slug: string, json: string): Promise<MenuSt
 
   const parsed = storedMenuSchema.safeParse(payload);
   if (!parsed.success) {
-    // Erste verständliche Fehlermeldung zurückgeben statt einer Zod-Wüste.
+    // Erste verständliche Fehlermeldung statt einer Zod-Wüste.
     const issue = parsed.error.issues[0];
     return { error: issue?.message ?? 'Speisekarte ist unvollständig' };
   }
+  return { menu: parsed.data };
+}
 
-  await upsertMenu(org.orgId, session.user.id, parsed.data);
+// Speichert NUR den Entwurf. Die Website sieht davon nichts, bis freigegeben wird.
+export async function saveMenuAction(slug: string, json: string): Promise<MenuState> {
+  const session = await getSession();
+  if (!session) redirect('/login');
+
+  const org = await loadMembership(slug, session.user.id);
+  if (!org) return { error: 'Kein Zugriff auf dieses Restaurant' };
+
+  const result = validate(json);
+  if ('error' in result) return { error: result.error };
+
+  await db
+    .insert(menu)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId: org.orgId,
+      data: result.menu,
+      updatedBy: session.user.id,
+    })
+    .onConflictDoUpdate({
+      target: menu.organizationId,
+      set: { data: result.menu, updatedBy: session.user.id, updatedAt: new Date() },
+    });
+
   revalidatePath(`/app/${slug}/menu`);
   return { success: true };
 }
 
-// Lädt die aktuelle Kaiser-Karte als Startvorlage — nur gedacht, solange die
-// Org noch keine Speisekarte hat (das Dashboard blendet den Button sonst aus).
+// Freigabe: speichert den Entwurf UND setzt ihn in einem Rutsch live. Dadurch
+// ist ausgeschlossen, dass etwas anderes live geht als das, was der Redakteur
+// im Freigabe-Dialog gesehen hat.
+export async function publishMenuAction(slug: string, json: string): Promise<MenuState> {
+  const session = await getSession();
+  if (!session) redirect('/login');
+
+  const org = await loadMembership(slug, session.user.id);
+  if (!org) return { error: 'Kein Zugriff auf dieses Restaurant' };
+
+  const result = validate(json);
+  if ('error' in result) return { error: result.error };
+
+  const now = new Date();
+  await db
+    .insert(menu)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId: org.orgId,
+      data: result.menu,
+      updatedBy: session.user.id,
+      publishedData: result.menu,
+      publishedBy: session.user.id,
+      publishedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: menu.organizationId,
+      set: {
+        data: result.menu,
+        updatedBy: session.user.id,
+        updatedAt: now,
+        publishedData: result.menu,
+        publishedBy: session.user.id,
+        publishedAt: now,
+      },
+    });
+
+  revalidatePath(`/app/${slug}/menu`);
+  return { success: true };
+}
+
+// Entwurf verwerfen: zurück auf den zuletzt veröffentlichten Stand.
+export async function discardDraftAction(slug: string): Promise<SeedState> {
+  const session = await getSession();
+  if (!session) redirect('/login');
+
+  const org = await loadMembership(slug, session.user.id);
+  if (!org) return { error: 'Kein Zugriff auf dieses Restaurant' };
+
+  const rows = await db
+    .select({ publishedData: menu.publishedData })
+    .from(menu)
+    .where(eq(menu.organizationId, org.orgId))
+    .limit(1);
+
+  const published = rows[0]?.publishedData;
+  if (!published) return { error: 'Es gibt noch keinen veröffentlichten Stand' };
+
+  const parsed = storedMenuSchema.safeParse(published);
+  if (!parsed.success) return { error: 'Veröffentlichter Stand ist beschädigt' };
+
+  await db
+    .update(menu)
+    .set({ data: parsed.data, updatedBy: session.user.id, updatedAt: new Date() })
+    .where(eq(menu.organizationId, org.orgId));
+
+  revalidatePath(`/app/${slug}/menu`);
+  return { menu: parsed.data };
+}
+
+// Lädt die aktuelle Kaiser-Karte als Startvorlage in den ENTWURF — sie geht
+// erst mit einer Freigabe live. Nur, solange die Org noch keine Karte hat.
 export async function seedMenuAction(slug: string): Promise<SeedState> {
   const session = await getSession();
   if (!session) redirect('/login');
@@ -90,7 +164,13 @@ export async function seedMenuAction(slug: string): Promise<SeedState> {
     return { error: 'Es ist bereits eine Speisekarte vorhanden' };
   }
 
-  await upsertMenu(org.orgId, session.user.id, kaiserMenuSeed);
+  await db.insert(menu).values({
+    id: crypto.randomUUID(),
+    organizationId: org.orgId,
+    data: kaiserMenuSeed,
+    updatedBy: session.user.id,
+  });
+
   revalidatePath(`/app/${slug}/menu`);
   return { menu: kaiserMenuSeed };
 }
