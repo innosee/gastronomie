@@ -8,6 +8,7 @@ import { member, menu, organization } from '@/lib/db/schema';
 import { getSession } from '@/lib/auth-helpers';
 import { storedMenuSchema, type StoredMenu } from '@/lib/menu-data';
 import { kaiserMenuSeed } from '@/lib/menu-seed/kaiser';
+import { revalidateSite } from '@/lib/revalidate';
 
 export type MenuState = { error?: string; success?: boolean } | null;
 
@@ -113,6 +114,12 @@ export async function publishMenuAction(slug: string, json: string): Promise<Men
     });
 
   revalidatePath(`/app/${slug}/menu`);
+
+  // Der Website Bescheid sagen, damit die Änderung sofort erscheint statt erst
+  // beim nächsten ISR-Fenster. Best effort — schlägt der Hook fehl, ist die
+  // Karte trotzdem veröffentlicht und wird spätestens in ~60 s ausgespielt.
+  await revalidateSite(slug);
+
   return { success: true };
 }
 
