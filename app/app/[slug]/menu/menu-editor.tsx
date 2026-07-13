@@ -66,8 +66,16 @@ export function MenuEditor({
   function handleSeed() {
     startSeed(async () => {
       const result = await seedMenuAction(slug);
-      if (result?.error) toast.error(result.error);
-      else toast.success('Vorlage geladen — Seite wird aktualisiert');
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
+      if (result?.menu) {
+        // Direkt in den State übernehmen — die Komponente bleibt gemountet,
+        // ein revalidatePath allein würde den alten (leeren) State stehen lassen.
+        setMenu(result.menu);
+        toast.success('Vorlage geladen');
+      }
     });
   }
 

@@ -34,6 +34,9 @@ export async function GET(
       {
         status: 429,
         headers: {
+          // Sonst könnte das CDN die Rate-Limit-Antwort cachen und legitime
+          // Clients bis zum Cache-Ablauf aussperren.
+          'Cache-Control': 'no-store',
           'Retry-After': String(limit.resetInSeconds),
           'X-RateLimit-Remaining': '0',
         },

@@ -6,10 +6,15 @@ import { eq, and } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { member, menu, organization } from '@/lib/db/schema';
 import { getSession } from '@/lib/auth-helpers';
-import { storedMenuSchema } from '@/lib/menu-data';
+import { storedMenuSchema, type StoredMenu } from '@/lib/menu-data';
 import { kaiserMenuSeed } from '@/lib/menu-seed/kaiser';
 
 export type MenuState = { error?: string; success?: boolean } | null;
+
+// Die Seed-Action gibt die geladene Karte zurück, damit der Editor sie direkt
+// in seinen State übernehmen kann. revalidatePath allein reicht nicht: die
+// Client-Komponente bleibt gemountet und behielte ihren alten (leeren) State.
+export type SeedState = { error?: string; menu?: StoredMenu } | null;
 
 // Guard wie in menus/actions.ts: der User muss Mitglied dieser Org sein.
 async function loadMembership(slug: string, userId: string) {
@@ -68,7 +73,7 @@ export async function saveMenuAction(slug: string, json: string): Promise<MenuSt
 
 // Lädt die aktuelle Kaiser-Karte als Startvorlage — nur gedacht, solange die
 // Org noch keine Speisekarte hat (das Dashboard blendet den Button sonst aus).
-export async function seedMenuAction(slug: string): Promise<MenuState> {
+export async function seedMenuAction(slug: string): Promise<SeedState> {
   const session = await getSession();
   if (!session) redirect('/login');
 
@@ -87,5 +92,5 @@ export async function seedMenuAction(slug: string): Promise<MenuState> {
 
   await upsertMenu(org.orgId, session.user.id, kaiserMenuSeed);
   revalidatePath(`/app/${slug}/menu`);
-  return { success: true };
+  return { menu: kaiserMenuSeed };
 }

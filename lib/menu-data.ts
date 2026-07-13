@@ -52,13 +52,40 @@ const priceVariantSchema = z.object({
   price: z.string().trim().max(60),
 });
 
-const storedItemSchema = z.object({
-  name: z.string().trim().min(1, 'Gericht braucht einen Namen').max(300),
-  description: z.string().trim().max(1000).default(''),
-  priceMode: z.enum(['single', 'variants']),
-  price: z.string().trim().max(60).default(''),
-  variants: z.array(priceVariantSchema).max(10).default([]),
-});
+const storedItemSchema = z
+  .object({
+    name: z.string().trim().min(1, 'Gericht braucht einen Namen').max(300),
+    description: z.string().trim().max(1000).default(''),
+    priceMode: z.enum(['single', 'variants']),
+    price: z.string().trim().max(60).default(''),
+    variants: z.array(priceVariantSchema).max(10).default([]),
+  })
+  .superRefine((item, ctx) => {
+    if (item.priceMode !== 'variants') return;
+
+    // Ohne Varianten würde toPublicPrice ein leeres Objekt liefern — das
+    // Gericht stünde ohne Preis auf der Website.
+    if (item.variants.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['variants'],
+        message: `„${item.name}“ braucht mindestens eine Preis-Variante`,
+      });
+      return;
+    }
+
+    // Doppelte Labels würden in Object.fromEntries still überschrieben —
+    // eine Variante verschwände spurlos.
+    const labels = item.variants.map((v) => v.label);
+    const duplicate = labels.find((label, i) => labels.indexOf(label) !== i);
+    if (duplicate) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['variants'],
+        message: `„${item.name}“ hat die Variante „${duplicate}“ doppelt`,
+      });
+    }
+  });
 
 const storedCategorySchema = z.object({
   name: z.string().trim().min(1, 'Kategorie braucht einen Namen').max(200),
