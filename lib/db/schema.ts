@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, integer, bigint, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, integer, bigint, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core';
 
 export const user = pgTable('user', {
   id: text('id').primaryKey(),
@@ -85,6 +85,26 @@ export const invitation = pgTable('invitation', {
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
 });
+
+// Die strukturierte à-la-carte-Speisekarte (Kategorien → Gerichte → Preise),
+// die auf der Website als filterbare Tab-Karte gerendert wird. Ein jsonb-
+// Dokument pro Org (Form: StoredMenu aus lib/menu-data.ts).
+//
+// NICHT zu verwechseln mit `menuPdf` unten — das sind die PDF-Karten zum
+// Download (Mittagskarte, Getränkekarte, …).
+export const menu = pgTable(
+  'menu',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    data: jsonb('data').notNull(),
+    updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('menu_org_unique').on(t.organizationId)],
+);
 
 export const menuPdf = pgTable(
   'menu_pdf',
