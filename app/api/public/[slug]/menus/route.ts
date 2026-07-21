@@ -5,11 +5,12 @@ import { menuPdf, organization } from '@/lib/db/schema';
 import { MENU_CATEGORIES, type MenuCategory } from '@/lib/menu-categories';
 import { rateLimit, clientIp } from '@/lib/rate-limit';
 
-// Vercel-CDN cached die Response 60 s und serviert sie weitere 5 Min stale,
+// Vercel-CDN cached die Response 10 Min und serviert sie weitere 1 h stale,
 // während im Hintergrund revalidiert wird. Drückt die Neon-DB-Last drastisch:
-// statt einer DB-Query pro Request gibt es höchstens eine pro Minute, egal
-// wie viele Clients (Kaiser-ISR, Bots, direkte Besucher) anfragen.
-const CACHE_CONTROL = 'public, s-maxage=60, stale-while-revalidate=300';
+// höchstens eine DB-Query pro 10 Min, egal wie viele Clients (Kaiser-ISR, Bots,
+// direkte Besucher) anfragen. Das lange Fenster lässt die Neon-Compute zwischen
+// Spitzen suspendieren (Scale-to-zero nach 5 Min), statt sie im Minutentakt zu wecken.
+const CACHE_CONTROL = 'public, s-maxage=600, stale-while-revalidate=3600';
 
 export async function GET(
   request: Request,

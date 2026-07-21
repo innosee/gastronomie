@@ -16,8 +16,10 @@ import { menu, organization } from '@/lib/db/schema';
 import { safeParseStoredMenu, toMenuData, EMPTY_MENU } from '@/lib/menu-data';
 import { rateLimit, clientIp } from '@/lib/rate-limit';
 
-// CDN cached 60 s und serviert 5 Min stale — hält die Neon-DB-Last niedrig,
-// egal wie viele Clients (Bots, Crawler, direkte Aufrufe) anfragen.
+// CDN cached 10 Min und serviert 1 h stale — hält die Neon-DB-Last niedrig,
+// egal wie viele Clients (Bots, Crawler, direkte Aufrufe) anfragen. Das lange
+// s-maxage lässt die Neon-Compute zwischen Traffic-Spitzen auf null skalieren
+// (Suspend nach 5 Min Inaktivität), statt sie im Minutentakt zu wecken.
 //
 // WICHTIG für Konsumenten: Diese Antwort kann bis zu s-maxage alt sein. Wer
 // unmittelbar nach einer Freigabe den GARANTIERT frischen Stand braucht (z. B.
@@ -25,7 +27,7 @@ import { rateLimit, clientIp } from '@/lib/rate-limit';
 // umgehen — etwa mit einem Cache-Buster-Query-Param. Genau das tut kaisers
 // menuApi.ts. Ein kürzeres s-maxage hilft NICHT: innerhalb des Fensters liefert
 // das CDN weiterhin stur die gecachte Antwort aus.
-const CACHE_CONTROL = 'public, s-maxage=60, stale-while-revalidate=300';
+const CACHE_CONTROL = 'public, s-maxage=600, stale-while-revalidate=3600';
 
 export async function GET(
   request: Request,
